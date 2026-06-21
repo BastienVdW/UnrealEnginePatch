@@ -32,56 +32,28 @@ void UUnrealEnginePatchSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 	}
 
 	RefreshStatus();
-	SyncPatchesToPluginState();
 }
 
 void UUnrealEnginePatchSubsystem::Deinitialize()
 {
-	// On editor close, unpatch any patch whose plugin is currently disabled
+	UnpatchDisabledPlugins();
+	Super::Deinitialize();
+}
+
+void UUnrealEnginePatchSubsystem::UnpatchDisabledPlugins()
+{
+	// On editor close, remove patches for any plugin that is currently disabled
 	// so engine source stays clean when that plugin is not in use
 	for (FEnginePatch& Patch : Patches)
 	{
 		if (Patch.Plugin.IsEmpty()) continue;
-		if (!IsPluginEnabled(Patch.Plugin) && Patch.Status == EPatchStatus::Applied)
-		{
-			FString Error;
-			FEnginePatchManager::UnpatchPatch(Patch, Error);
-		}
-	}
-	Super::Deinitialize();
-}
+		if (IsPluginEnabled(Patch.Plugin)) continue;
+		if (Patch.Status != EPatchStatus::Applied) continue;
 
-void UUnrealEnginePatchSubsystem::SyncPatchesToPluginState()
-{
-	for (FEnginePatch& Patch : Patches)
-	{
-		const bool bPluginEnabled = Patch.Plugin.IsEmpty() || IsPluginEnabled(Patch.Plugin);
 		FString Error;
-		if (bPluginEnabled && Patch.Status == EPatchStatus::NotApplied)
+		if (!FEnginePatchManager::UnpatchPatch(Patch, Error))
 		{
-			if (!FEnginePatchManager::ApplyPatch(Patch, Error))
-			{
-				Patch.Status = EPatchStatus::Error;
-				Patch.ErrorMessage = Error;
-				UE_LOG(LogTemp, Error, TEXT("EnginePatch: auto-apply failed for [%s]: %s"), *Patch.PatchId, *Error);
-			}
-			else
-			{
-				Patch.Status = FEnginePatchManager::GetPatchStatus(Patch);
-			}
-		}
-		else if (!bPluginEnabled && Patch.Status == EPatchStatus::Applied)
-		{
-			if (!FEnginePatchManager::UnpatchPatch(Patch, Error))
-			{
-				Patch.Status = EPatchStatus::Error;
-				Patch.ErrorMessage = Error;
-				UE_LOG(LogTemp, Error, TEXT("EnginePatch: auto-unpatch failed for [%s]: %s"), *Patch.PatchId, *Error);
-			}
-			else
-			{
-				Patch.Status = FEnginePatchManager::GetPatchStatus(Patch);
-			}
+			UE_LOG(LogTemp, Warning, TEXT("EnginePatch: auto-unpatch on close failed for [%s]: %s"), *Patch.PatchId, *Error);
 		}
 	}
 }
