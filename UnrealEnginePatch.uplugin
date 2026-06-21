@@ -14,6 +14,7 @@
   "IsBetaVersion": false,
   "IsExperimentalVersion": false,
   "Installed": false,
+  "EnabledByDefault" : true,
   "Modules": [
     {
       "Name": "UnrealEnginePatchEditor",
@@ -23,7 +24,7 @@
   ],
   "PreBuildSteps": {
     "Win64": [
-      "\"$(PluginDir)\\Tools\\Bin\\EnginePatchCLI.exe\" \"$(ProjectDir)\""
+      "\"$(PluginDir)\\Tools\\Bin\\EnginePatchCLI.exe\" \"$(ProjectDir)\" --engine-dir \"$(EngineDir)\""
     ]
   }
 }
