@@ -1,3 +1,10 @@
+// Copyright (C) 2024 Van de Walle Bastien
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+// http://www.apache.org/licenses/LICENSE-2.0
+
+
 #include "EnginePatchManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -247,7 +254,58 @@ bool FEnginePatchManager::UnpatchPatch(const FEnginePatch& Patch, FString& OutEr
 
 bool FEnginePatchManager::UnpatchOperation(const FString& FilePath, const FString& PatchId, const FEnginePatchOperation& Op, FString& OutError)
 {
-	// Stub for Task 5 - UnpatchOperation
-	OutError = TEXT("UnpatchOperation not yet implemented");
-	return false;
+	if (!IsOperationApplied(FilePath, PatchId, Op.Id)) return true; // already reverted
+
+	TArray<FString> Lines;
+	if (!FFileHelper::LoadFileToStringArray(Lines, *FilePath))
+	{
+		OutError = FString::Printf(TEXT("Cannot read file: %s"), *FilePath);
+		return false;
+	}
+
+	FString BeginMarker = MakeBeginMarker(PatchId, Op.Id);
+	FString EndMarker   = MakeEndMarker(PatchId, Op.Id);
+	static const FString RemovedPrefix = TEXT("// @@REMOVED: ");
+
+	int32 BeginIndex = INDEX_NONE;
+	int32 EndIndex   = INDEX_NONE;
+	for (int32 i = 0; i < Lines.Num(); ++i)
+	{
+		if (Lines[i].TrimStartAndEnd() == BeginMarker) BeginIndex = i;
+		if (Lines[i].TrimStartAndEnd() == EndMarker)   { EndIndex = i; break; }
+	}
+
+	if (BeginIndex == INDEX_NONE || EndIndex == INDEX_NONE)
+	{
+		OutError = FString::Printf(TEXT("Markers not found in %s for op %s::%s"), *FilePath, *PatchId, *Op.Id);
+		return false;
+	}
+
+	// Collect restored lines from @@REMOVED: comments
+	TArray<FString> Restored;
+	for (int32 i = BeginIndex + 1; i < EndIndex; ++i)
+	{
+		FString Trimmed = Lines[i].TrimStartAndEnd();
+		if (Trimmed.StartsWith(RemovedPrefix))
+		{
+			Restored.Add(Trimmed.Mid(RemovedPrefix.Len()));
+		}
+	}
+
+	// Remove the entire BEGIN..END block
+	int32 BlockLen = EndIndex - BeginIndex + 1;
+	Lines.RemoveAt(BeginIndex, BlockLen);
+
+	// Re-insert the original lines
+	for (int32 i = 0; i < Restored.Num(); ++i)
+	{
+		Lines.Insert(Restored[i], BeginIndex + i);
+	}
+
+	if (!FFileHelper::SaveStringArrayToFile(Lines, *FilePath))
+	{
+		OutError = FString::Printf(TEXT("Cannot write file: %s"), *FilePath);
+		return false;
+	}
+	return true;
 }
