@@ -74,7 +74,19 @@ bool FEnginePatchFileLoader::ParsePatchJson(const FString& JsonContent, FEngineP
 		if (!VersionVal->TryGetObject(VersionObj)) continue;
 
 		FEnginePatchVersion Version;
-		(*VersionObj)->TryGetStringField(TEXT("engineVersion"), Version.EngineVersion);
+		// Support both "engineVersions": ["5.7","5.8"] and legacy "engineVersion": "5.8"
+		const TArray<TSharedPtr<FJsonValue>>* VersionsField;
+		if ((*VersionObj)->TryGetArrayField(TEXT("engineVersions"), VersionsField))
+		{
+			for (const TSharedPtr<FJsonValue>& V : *VersionsField)
+				Version.EngineVersions.Add(V->AsString());
+		}
+		else
+		{
+			FString SingleVersion;
+			if ((*VersionObj)->TryGetStringField(TEXT("engineVersion"), SingleVersion))
+				Version.EngineVersions.Add(SingleVersion);
+		}
 
 		const TArray<TSharedPtr<FJsonValue>>* FilesArray;
 		if (!(*VersionObj)->TryGetArrayField(TEXT("files"), FilesArray)) continue;

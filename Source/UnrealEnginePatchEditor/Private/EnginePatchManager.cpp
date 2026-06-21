@@ -50,7 +50,7 @@ EPatchStatus FEnginePatchManager::GetPatchStatus(const FEnginePatch& Patch)
 {
 	FString EngineVersion = GetCurrentEngineVersion();
 	const FEnginePatchVersion* MatchedVersion = Patch.Versions.FindByPredicate(
-		[&](const FEnginePatchVersion& V) { return V.EngineVersion == EngineVersion; });
+		[&](const FEnginePatchVersion& V) { return V.EngineVersions.Contains(EngineVersion); });
 
 	if (!MatchedVersion) return EPatchStatus::NotApplicable;
 
@@ -143,7 +143,7 @@ bool FEnginePatchManager::ApplyPatch(const FEnginePatch& Patch, FString& OutErro
 {
 	FString EngineVersion = GetCurrentEngineVersion();
 	const FEnginePatchVersion* MatchedVersion = Patch.Versions.FindByPredicate(
-		[&](const FEnginePatchVersion& V) { return V.EngineVersion == EngineVersion; });
+		[&](const FEnginePatchVersion& V) { return V.EngineVersions.Contains(EngineVersion); });
 	if (!MatchedVersion) return true; // NotApplicable — not an error
 
 	for (const FEnginePatchFile& PFile : MatchedVersion->Files)
@@ -247,7 +247,7 @@ bool FEnginePatchManager::UnpatchPatch(const FEnginePatch& Patch, FString& OutEr
 {
 	FString EngineVersion = GetCurrentEngineVersion();
 	const FEnginePatchVersion* MatchedVersion = Patch.Versions.FindByPredicate(
-		[&](const FEnginePatchVersion& V) { return V.EngineVersion == EngineVersion; });
+		[&](const FEnginePatchVersion& V) { return V.EngineVersions.Contains(EngineVersion); });
 	if (!MatchedVersion) return true; // NotApplicable — not an error
 
 	// Iterate operations in reverse order to handle line drift correctly during removal

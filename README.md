@@ -40,7 +40,7 @@ One file per logical patch. A patch can touch multiple engine files and supports
   "plugin": "MyPlugin",
   "versions": [
     {
-      "engineVersion": "5.8",
+      "engineVersions": ["5.8"],
       "files": [
         {
           "file": "Runtime/SomeModule/Public/SomeHeader.h",
@@ -71,8 +71,8 @@ One file per logical patch. A patch can touch multiple engine files and supports
 | `patchId` | Yes | Unique identifier used in marker comments. Must be stable across versions. |
 | `description` | Yes | Shown in the Engine Patch Manager panel. |
 | `plugin` | No | Plugin name (matches `.uplugin` filename without extension). When set, the patch auto-applies/reverts based on whether the plugin is enabled. Omit for unconditional patches. |
-| `versions[]` | Yes | One entry per engine version. The patcher only applies the entry matching the running engine. |
-| `engineVersion` | Yes | String in `MAJOR.MINOR` format, e.g. `"5.8"`. |
+| `versions[]` | Yes | One entry per engine version range. The patcher only applies the entry whose `engineVersions` list includes the running engine. |
+| `engineVersions` | Yes | Array of version strings in `MAJOR.MINOR` format. Use multiple entries to share one patch across versions, e.g. `["5.7", "5.8"]`. |
 | `files[]` | Yes | Engine source files to patch. Paths are relative to `<EngineDir>/Source/`. |
 | `operations[]` | Yes | Ordered list of operations for this file. Applied in order; line numbers are relative to the **original unpatched** file. |
 | `id` | Yes | Unique operation ID within the patch. Used in marker comments. |

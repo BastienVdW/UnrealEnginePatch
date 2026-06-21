@@ -32,7 +32,7 @@ struct FEnginePatchFile
 
 struct FEnginePatchVersion
 {
-	FString EngineVersion;  // e.g. "5.8"
+	TArray<FString> EngineVersions;  // e.g. ["5.7", "5.8"] — supports multiple engine versions
 	TArray<FEnginePatchFile> Files;
 };
 
