@@ -51,7 +51,7 @@ void FUnrealEnginePatchEditorModule::RegisterMenus()
     );
 }
 
-TSharedPtr<SDockTab> FUnrealEnginePatchEditorModule::OnSpawnPatchTab(const FSpawnTabArgs& Args)
+TSharedRef<SDockTab> FUnrealEnginePatchEditorModule::OnSpawnPatchTab(const FSpawnTabArgs& Args)
 {
 	return SNew(SDockTab)
 		.TabRole(ETabRole::NomadTab)
