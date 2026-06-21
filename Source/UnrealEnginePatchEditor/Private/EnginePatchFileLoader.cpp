@@ -59,6 +59,7 @@ bool FEnginePatchFileLoader::ParsePatchJson(const FString& JsonContent, FEngineP
 		OutError = TEXT("Missing patchId or description");
 		return false;
 	}
+	RootObj->TryGetStringField(TEXT("plugin"), OutPatch.Plugin); // optional
 
 	const TArray<TSharedPtr<FJsonValue>>* VersionsArray;
 	if (!RootObj->TryGetArrayField(TEXT("versions"), VersionsArray))

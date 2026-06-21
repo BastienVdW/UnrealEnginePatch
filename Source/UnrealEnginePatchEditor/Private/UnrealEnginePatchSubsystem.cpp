@@ -7,7 +7,14 @@
 #include "UnrealEnginePatchSubsystem.h"
 #include "EnginePatchFileLoader.h"
 #include "EnginePatchManager.h"
+#include "Interfaces/IPluginManager.h"
 #include "Misc/Paths.h"
+
+static bool IsPluginEnabled(const FString& PluginName)
+{
+	TSharedPtr<IPlugin> Plugin = IPluginManager::Get().FindPlugin(PluginName);
+	return Plugin.IsValid() && Plugin->IsEnabled();
+}
 
 void UUnrealEnginePatchSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 {
@@ -25,11 +32,58 @@ void UUnrealEnginePatchSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 	}
 
 	RefreshStatus();
+	SyncPatchesToPluginState();
 }
 
 void UUnrealEnginePatchSubsystem::Deinitialize()
 {
+	// On editor close, unpatch any patch whose plugin is currently disabled
+	// so engine source stays clean when that plugin is not in use
+	for (FEnginePatch& Patch : Patches)
+	{
+		if (Patch.Plugin.IsEmpty()) continue;
+		if (!IsPluginEnabled(Patch.Plugin) && Patch.Status == EPatchStatus::Applied)
+		{
+			FString Error;
+			FEnginePatchManager::UnpatchPatch(Patch, Error);
+		}
+	}
 	Super::Deinitialize();
+}
+
+void UUnrealEnginePatchSubsystem::SyncPatchesToPluginState()
+{
+	for (FEnginePatch& Patch : Patches)
+	{
+		const bool bPluginEnabled = Patch.Plugin.IsEmpty() || IsPluginEnabled(Patch.Plugin);
+		FString Error;
+		if (bPluginEnabled && Patch.Status == EPatchStatus::NotApplied)
+		{
+			if (!FEnginePatchManager::ApplyPatch(Patch, Error))
+			{
+				Patch.Status = EPatchStatus::Error;
+				Patch.ErrorMessage = Error;
+				UE_LOG(LogTemp, Error, TEXT("EnginePatch: auto-apply failed for [%s]: %s"), *Patch.PatchId, *Error);
+			}
+			else
+			{
+				Patch.Status = FEnginePatchManager::GetPatchStatus(Patch);
+			}
+		}
+		else if (!bPluginEnabled && Patch.Status == EPatchStatus::Applied)
+		{
+			if (!FEnginePatchManager::UnpatchPatch(Patch, Error))
+			{
+				Patch.Status = EPatchStatus::Error;
+				Patch.ErrorMessage = Error;
+				UE_LOG(LogTemp, Error, TEXT("EnginePatch: auto-unpatch failed for [%s]: %s"), *Patch.PatchId, *Error);
+			}
+			else
+			{
+				Patch.Status = FEnginePatchManager::GetPatchStatus(Patch);
+			}
+		}
+	}
 }
 
 void UUnrealEnginePatchSubsystem::RefreshStatus()

@@ -40,6 +40,7 @@ struct FEnginePatch
 {
 	FString PatchId;
 	FString Description;
+	FString Plugin;         // plugin name that owns this patch (e.g. "Recall"); empty = always apply
 	TArray<FEnginePatchVersion> Versions;
 
 	// Runtime state (not from JSON)

@@ -39,4 +39,7 @@ public:
 
 	// Revert a single patch by ID.
 	bool UnpatchPatch(const FString& PatchId, FString& OutError);
+
+	// Auto-apply patches whose plugin is enabled; auto-unpatch whose plugin is disabled.
+	void SyncPatchesToPluginState();
 };

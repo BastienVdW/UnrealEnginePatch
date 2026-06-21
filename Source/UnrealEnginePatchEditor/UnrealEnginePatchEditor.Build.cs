@@ -30,6 +30,7 @@ public class UnrealEnginePatchEditor : ModuleRules
             "ToolMenus",
             "WorkspaceMenuStructure",
             "InputCore",
+            "Projects",
         });
     }
 }
