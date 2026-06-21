@@ -223,8 +223,52 @@ PatchStatus EnginePatchManager::GetPatchStatus(const EnginePatch& patch,
     return PatchStatus::Error;
 }
 
+int EnginePatchManager::ComputeExistingPatchOffset(const std::vector<std::string>& lines,
+                                                    int originalLine0Based)
+{
+    static const std::string kBeginPrefix  = "// @@PATCH_BEGIN(";
+    static const std::string kEndPrefix    = "// @@PATCH_END(";
+    static const std::string kRemovedPrefix = "// @@REMOVED: ";
+
+    int offset = 0;
+    int i = 0;
+    while (i < static_cast<int>(lines.size()))
+    {
+        // Stop once we have passed the adjusted target position.
+        if (i >= originalLine0Based + offset)
+            break;
+
+        if (lines[i].find(kBeginPrefix) != std::string::npos)
+        {
+            int endIdx = -1;
+            int removedCount = 0;
+            for (int j = i + 1; j < static_cast<int>(lines.size()); ++j)
+            {
+                if (lines[j].substr(0, kRemovedPrefix.size()) == kRemovedPrefix)
+                    ++removedCount;
+                if (lines[j].find(kEndPrefix) != std::string::npos)
+                {
+                    endIdx = j;
+                    break;
+                }
+            }
+            if (endIdx != -1)
+            {
+                // Net lines added by this block:
+                //   block occupies (endIdx - i + 1) lines in the file now,
+                //   but it replaced 'removedCount' original lines.
+                int blockSize = endIdx - i + 1;
+                offset += blockSize - removedCount;
+                i = endIdx + 1;
+                continue;
+            }
+        }
+        ++i;
+    }
+    return offset;
+}
+
 bool EnginePatchManager::ApplyOperation(std::vector<std::string>& lines,
-                                         int& lineOffset,
                                          const std::string& patchId,
                                          const PatchOperation& op,
                                          std::string& outError)
@@ -237,7 +281,11 @@ bool EnginePatchManager::ApplyOperation(std::vector<std::string>& lines,
         if (line.find(beginMarker) != std::string::npos) return true; // already applied
     }
 
-    int adjustedLine = (op.line - 1) + lineOffset;
+    // Adjust the target line to account for all previously applied patch blocks
+    // (from this patch's earlier ops and from other patches already in the file).
+    int offset = ComputeExistingPatchOffset(lines, op.line - 1);
+    int adjustedLine = (op.line - 1) + offset;
+
     if (adjustedLine < 0 || adjustedLine + static_cast<int>(op.remove.size()) > static_cast<int>(lines.size()))
     {
         outError = "Line range out of bounds for operation " + op.id;
@@ -270,7 +318,6 @@ bool EnginePatchManager::ApplyOperation(std::vector<std::string>& lines,
                 lines.begin() + adjustedLine + static_cast<int>(op.remove.size()));
     lines.insert(lines.begin() + adjustedLine, block.begin(), block.end());
 
-    lineOffset += static_cast<int>(block.size()) - static_cast<int>(op.remove.size());
     return true;
 }
 
@@ -302,10 +349,9 @@ bool EnginePatchManager::ApplyPatch(const EnginePatch& patch,
             return false;
         }
 
-        int lineOffset = 0;
         for (const auto& op : pfile.operations)
         {
-            if (!ApplyOperation(lines, lineOffset, patch.patchId, op, outError))
+            if (!ApplyOperation(lines, patch.patchId, op, outError))
                 return false;
         }
 

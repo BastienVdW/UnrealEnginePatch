@@ -31,9 +31,13 @@ private:
         const std::string& filePath,
         const std::string& patchId,
         const std::string& opId);
+    // Counts the net lines added by all already-applied patch blocks whose BEGIN marker
+    // appears before originalLine0Based in the current file state.
+    static int ComputeExistingPatchOffset(
+        const std::vector<std::string>& lines,
+        int originalLine0Based);
     static bool ApplyOperation(
         std::vector<std::string>& lines,
-        int& lineOffset,
         const std::string& patchId,
         const PatchOperation& op,
         std::string& outError);
