@@ -36,24 +36,33 @@ void UUnrealEnginePatchSubsystem::Initialize(FSubsystemCollectionBase& Collectio
 
 void UUnrealEnginePatchSubsystem::Deinitialize()
 {
-	UnpatchDisabledPlugins();
+	SyncPatchesOnClose();
 	Super::Deinitialize();
 }
 
-void UUnrealEnginePatchSubsystem::UnpatchDisabledPlugins()
+void UUnrealEnginePatchSubsystem::SyncPatchesOnClose()
 {
-	// On editor close, remove patches for any plugin that is currently disabled
-	// so engine source stays clean when that plugin is not in use
+	// On editor close, sync patches to plugin state:
+	// - Apply patches for enabled plugins (so engine source is ready for next compile)
+	// - Remove patches for disabled plugins (keep source clean)
 	for (FEnginePatch& Patch : Patches)
 	{
-		if (Patch.Plugin.IsEmpty()) continue;
-		if (IsPluginEnabled(Patch.Plugin)) continue;
-		if (Patch.Status != EPatchStatus::Applied) continue;
-
+		const bool bPluginEnabled = Patch.Plugin.IsEmpty() || IsPluginEnabled(Patch.Plugin);
 		FString Error;
-		if (!FEnginePatchManager::UnpatchPatch(Patch, Error))
+
+		if (bPluginEnabled && Patch.Status == EPatchStatus::NotApplied)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("EnginePatch: auto-unpatch on close failed for [%s]: %s"), *Patch.PatchId, *Error);
+			if (!FEnginePatchManager::ApplyPatch(Patch, Error))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("EnginePatch: auto-apply on close failed for [%s]: %s"), *Patch.PatchId, *Error);
+			}
+		}
+		else if (!bPluginEnabled && Patch.Status == EPatchStatus::Applied)
+		{
+			if (!FEnginePatchManager::UnpatchPatch(Patch, Error))
+			{
+				UE_LOG(LogTemp, Warning, TEXT("EnginePatch: auto-unpatch on close failed for [%s]: %s"), *Patch.PatchId, *Error);
+			}
 		}
 	}
 }

@@ -41,6 +41,6 @@ public:
 	bool UnpatchPatch(const FString& PatchId, FString& OutError);
 
 private:
-	// Called on Deinitialize: unpatch patches whose plugin is disabled.
-	void UnpatchDisabledPlugins();
+	// Called on Deinitialize: apply patches for enabled plugins, remove for disabled plugins.
+	void SyncPatchesOnClose();
 };
