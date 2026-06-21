@@ -5,12 +5,22 @@
 // http://www.apache.org/licenses/LICENSE-2.0
 
 using UnrealBuildTool;
+using System.IO;
 
 public class UnrealEnginePatchEditor : ModuleRules
 {
     public UnrealEnginePatchEditor(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
+
+        // EnginePatchCore standalone lib (ThirdParty)
+        string EnginePatchCoreDir = Path.Combine(ModuleDirectory, "../../ThirdParty/EnginePatchCore");
+        PrivateIncludePaths.Add(Path.Combine(EnginePatchCoreDir, "include"));
+
+        if (Target.Platform == UnrealTargetPlatform.Win64)
+        {
+            PublicAdditionalLibraries.Add(Path.Combine(EnginePatchCoreDir, "Lib/Win64/EnginePatchCore.lib"));
+        }
 
         PublicDependencyModuleNames.AddRange(new string[]
         {

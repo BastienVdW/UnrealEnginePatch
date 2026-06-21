@@ -169,7 +169,7 @@ bool EnginePatchManager::ApplyOperation(
     std::vector<std::string> block;
     block.push_back(beginMarker);
     for (const auto& removedLine : op.remove) {
-        block.push_back("@@REMOVED: " + removedLine);
+        block.push_back("// @@REMOVED: " + removedLine);
     }
     for (const auto& addedLine : op.add) {
         block.push_back(addedLine);
@@ -307,8 +307,9 @@ bool EnginePatchManager::UnpatchOperation(
     std::vector<std::string> restoredLines;
     for (int i = beginIdx + 1; i < endIdx; ++i) {
         const std::string& currentLine = lines[i];
-        if (currentLine.substr(0, 11) == "@@REMOVED: ") {
-            restoredLines.push_back(currentLine.substr(11));
+        static const std::string kRemovedPrefix = "// @@REMOVED: ";
+        if (currentLine.substr(0, kRemovedPrefix.size()) == kRemovedPrefix) {
+            restoredLines.push_back(currentLine.substr(kRemovedPrefix.size()));
         }
     }
 
@@ -371,17 +372,35 @@ bool EnginePatchManager::UnpatchPatch(
     return true;
 }
 
-// Free function implementation
 void SyncPatches(
     const std::vector<EnginePatch>& patches,
     const std::map<std::string, bool>& pluginEnabled,
     const std::string& engineDir,
     const std::string& engineVersion,
-    std::ostream& log)
+    std::ostream& log,
+    bool reapply)
 {
-    for (const auto& patch : patches) {
+    // Phase 1 (reapply only): unpatch everything currently applied so patches are re-applied fresh.
+    if (reapply)
+    {
+        for (const auto& patch : patches)
+        {
+            PatchStatus status = EnginePatchManager::GetPatchStatus(patch, engineDir, engineVersion);
+            if (status == PatchStatus::Applied || status == PatchStatus::Error)
+            {
+                std::string err;
+                bool ok = EnginePatchManager::UnpatchPatch(patch, engineDir, engineVersion, err);
+                log << "[REAPPLY-UNPATCH] " << patch.patchId << (ok ? " OK" : " FAILED: " + err) << "\n";
+            }
+        }
+    }
+
+    // Phase 2: apply patches for enabled plugins, skip/unpatch for disabled.
+    for (const auto& patch : patches)
+    {
         bool enabled = true;
-        if (!patch.plugin.empty()) {
+        if (!patch.plugin.empty())
+        {
             auto it = pluginEnabled.find(patch.plugin);
             enabled = (it != pluginEnabled.end()) ? it->second : false;
         }
@@ -389,13 +408,18 @@ void SyncPatches(
         PatchStatus status = EnginePatchManager::GetPatchStatus(patch, engineDir, engineVersion);
         std::string err;
 
-        if (enabled && status == PatchStatus::NotApplied) {
+        if (enabled && status == PatchStatus::NotApplied)
+        {
             bool ok = EnginePatchManager::ApplyPatch(patch, engineDir, engineVersion, err);
             log << "[APPLY] " << patch.patchId << (ok ? " OK" : " FAILED: " + err) << "\n";
-        } else if (!enabled && status == PatchStatus::Applied) {
+        }
+        else if (!enabled && status == PatchStatus::Applied)
+        {
             bool ok = EnginePatchManager::UnpatchPatch(patch, engineDir, engineVersion, err);
             log << "[UNPATCH] " << patch.patchId << (ok ? " OK" : " FAILED: " + err) << "\n";
-        } else {
+        }
+        else
+        {
             log << "[SKIP] " << patch.patchId << " (status=" << static_cast<int>(status) << " enabled=" << (enabled ? "true" : "false") << ")\n";
         }
     }

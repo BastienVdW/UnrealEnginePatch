@@ -33,17 +33,28 @@ std::string GetEngineDir(const std::string& version) {
     DWORD bufSize = sizeof(buf);
     RegQueryValueExA(hKey, "InstalledDirectory", nullptr, nullptr, (LPBYTE)buf, &bufSize);
     RegCloseKey(hKey);
-    return buf;
+    // Registry gives root install dir; engine headers live in <root>/Engine/
+    std::string root = buf;
+    if (!root.empty() && root.back() != '\\' && root.back() != '/') root += '/';
+    return root + "Engine";
 }
 #endif
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: EnginePatchCLI <project_dir>" << std::endl;
+        std::cerr << "Usage: EnginePatchCLI <project_dir> [--reapply|--no-reapply]" << std::endl;
         return 1;
     }
 
     std::string projectDir = argv[1];
+
+    // Parse optional flags (default: no reapply; bat passes --reapply explicitly)
+    bool reapply = false;
+    for (int i = 2; i < argc; ++i) {
+        std::string arg = argv[i];
+        if (arg == "--reapply")    reapply = true;
+        if (arg == "--no-reapply") reapply = false;
+    }
     fs::path projectPath(projectDir);
 
     // 1. Find the .uproject file
@@ -142,7 +153,7 @@ int main(int argc, char* argv[]) {
 
     // 5. Call SyncPatches
     try {
-        SyncPatches(allPatches, pluginEnabled, engineDir, engineVersion, std::cout);
+        SyncPatches(allPatches, pluginEnabled, engineDir, engineVersion, std::cout, reapply);
     } catch (const std::exception& e) {
         std::cerr << "[EnginePatch] Sync failed: " << e.what() << std::endl;
         return 1;
