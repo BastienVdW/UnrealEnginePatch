@@ -163,6 +163,13 @@ std::string EnginePatchManager::ResolveEnginePath(const std::string& engineDir, 
     std::string result = engineDir;
     if (!result.empty() && result.back() != '/' && result.back() != '\\')
         result += '/';
+
+    if (relPath.rfind("Plugins/", 0) == 0)
+    {
+        result += relPath;
+        return result;
+    }
+
     result += "Source/";
     result += relPath;
     return result;

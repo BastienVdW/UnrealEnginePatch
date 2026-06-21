@@ -21,7 +21,7 @@ struct PatchOperation {
 };
 
 struct PatchFile {
-    std::string file;  // relative to Engine/Source/
+    std::string file;  // relative to Engine/Source/ or Engine/Plugins/
     std::vector<PatchOperation> operations;
 };
 
