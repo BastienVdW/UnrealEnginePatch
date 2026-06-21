@@ -4,34 +4,25 @@ An editor-only Unreal Engine plugin that applies and reverts versioned, line-lev
 
 ## How it works
 
-- On editor close (`Deinitialize`), the subsystem reads the current project descriptor and for each patch:
-  - If the associated plugin is **enabled** and the patch is **not applied** → applies it.
-  - If the associated plugin is **disabled** and the patch is **applied** → removes it.
-- Patches are idempotent: applying twice or removing when not applied is safe.
-- Applied patches are wrapped in marker comments so they can be cleanly reverted without manually tracking what changed.
+- On editor close, the subsystem reads the current project descriptor and for each patch:
+  - Plugin **enabled** + patch **not applied** → applies it.
+  - Plugin **disabled** + patch **applied** → removes it.
+- Patches are idempotent and wrapped in marker comments so they revert cleanly.
+- If no `versions` entry matches the running engine the patch is silently skipped.
 
-The **Engine Patch Manager** panel (`Tools > Engine Patch Manager`) shows the status of all discovered patches and lets you apply or revert them individually or all at once.
+The **Engine Patch Manager** panel (`Tools > Engine Patch Manager`) shows patch status and lets you apply or revert them individually or all at once.
 
 ## Patch file location
-
-Each plugin that requires engine patches places its JSON files under:
 
 ```
 Plugins/<YourPlugin>/EnginePatch/*.json
 ```
 
-Example:
-
-```
-Plugins/Recall/EnginePatch/mass-entity-handle-remove-transient.json
-Plugins/Recall/EnginePatch/mass-processing-render-phase.json
-```
-
-`UnrealEnginePatch` scans `Plugins/Recall/EnginePatch/` automatically. To add discovery of another plugin's patches, extend `UUnrealEnginePatchSubsystem::Initialize()`.
+`UnrealEnginePatch` scans every `Plugins/*/EnginePatch/` directory automatically.
 
 ## JSON format
 
-One file per logical patch. A patch can touch multiple engine files and supports multiple operations per file.
+One file per logical patch. A patch can touch multiple engine files with multiple operations per file.
 
 ```json
 {
@@ -48,13 +39,8 @@ One file per logical patch. A patch can touch multiple engine files and supports
             {
               "id": "op-unique-id",
               "line": 42,
-              "remove": [
-                "\told line to replace;"
-              ],
-              "add": [
-                "\tnew line A;",
-                "\tnew line B;"
-              ]
+              "remove": ["  old line;"],
+              "add":    ["  new line A;", "  new line B;"]
             }
           ]
         }
@@ -64,82 +50,54 @@ One file per logical patch. A patch can touch multiple engine files and supports
 }
 ```
 
-### Fields
-
 | Field | Required | Description |
 |---|---|---|
-| `patchId` | Yes | Unique identifier used in marker comments. Must be stable across versions. |
-| `description` | Yes | Shown in the Engine Patch Manager panel. |
-| `plugin` | No | Plugin name (matches `.uplugin` filename without extension). When set, the patch auto-applies/reverts based on whether the plugin is enabled. Omit for unconditional patches. |
-| `versions[]` | Yes | One entry per engine version range. The patcher only applies the entry whose `engineVersions` list includes the running engine. |
-| `engineVersions` | Yes | Array of version strings in `MAJOR.MINOR` format. Use multiple entries to share one patch across versions, e.g. `["5.7", "5.8"]`. |
-| `files[]` | Yes | Engine source files to patch. Paths are relative to `<EngineDir>/Source/`. |
-| `operations[]` | Yes | Ordered list of operations for this file. Applied in order; line numbers are relative to the **original unpatched** file. |
-| `id` | Yes | Unique operation ID within the patch. Used in marker comments. |
-| `line` | Yes | 1-based line number in the **original** file where the operation starts. |
-| `remove` | No | Lines to remove starting at `line`. Must match the file content exactly (including tabs/spaces). Omit or leave empty for pure insertions. |
-| `add` | No | Lines to insert in place of the removed lines (or at `line` if `remove` is empty). |
-
-### Pure insertion example
-
-```json
-{
-  "id": "add-my-method",
-  "line": 214,
-  "remove": [],
-  "add": [
-    "\tMYMODULE_API void MyMethod(float DeltaTime);",
-    "\tMYMODULE_API void MyOtherMethod();"
-  ]
-}
-```
-
-### Replace example
-
-```json
-{
-  "id": "enable-parallel",
-  "line": 14,
-  "remove": [
-    "#define MASS_DO_PARALLEL !UE_SERVER"
-  ],
-  "add": [
-    "#define MASS_DO_PARALLEL 1"
-  ]
-}
-```
+| `patchId` | Yes | Unique identifier used in marker comments. Must be stable. |
+| `plugin` | No | `.uplugin` name (without extension). Drives auto-apply/revert. Omit for unconditional patches. |
+| `engineVersions` | Yes | e.g. `["5.7", "5.8"]`. Only the matching entry is applied. |
+| `file` | Yes | Path relative to `<EngineDir>/Source/` (or `<EngineDir>/Plugins/` if the path starts with `Plugins/`). |
+| `line` | Yes | 1-based line in the **original unpatched** file. The patcher tracks offset across multiple operations automatically. |
+| `remove` | No | Lines to remove at `line`. Must match exactly (whitespace included). |
+| `add` | No | Lines to insert in place of the removed lines. |
 
 ## How patches are stored in the engine file
 
-When applied, each operation is wrapped in marker comments:
-
 ```cpp
 // @@PATCH_BEGIN(my-patch-id::op-unique-id)
-// @@REMOVED: \told line to replace;
-\tnew line A;
-\tnew line B;
+// @@REMOVED:   old line;
+  new line A;
+  new line B;
 // @@PATCH_END(my-patch-id::op-unique-id)
 ```
 
-- `@@REMOVED:` lines store the original content so the patcher can restore it on unpatch without the JSON needing to re-specify what was there.
-- Markers use the `patchId::opId` pair, so multiple patches on the same file never collide.
+`@@REMOVED:` preserves the original content so unpatch works without re-reading the JSON.
 
-## Multiple operations on the same file
+## Manual patch sync (CLI / batch)
 
-When a patch has several operations targeting the same file, all are applied in a single read/write pass. Line numbers in the JSON always refer to the **original unpatched** file; the patcher tracks the running offset internally so later operations land at the correct position.
+Use `Scripts/SyncPatches.bat` to apply patches outside the editor — useful for CI or testing against a specific engine build.
 
-## Engine version mismatch
+```
+SyncPatches.bat <project_dir> [engine_dir] [--no-reapply]
+```
 
-If no `versions` entry matches the running engine, the patch status shows **N/A** and it is silently skipped — no error, no modification.
+| Argument | Description |
+|---|---|
+| `project_dir` | Directory containing the `.uproject` file. |
+| `engine_dir` | *(Optional)* Path to the engine's `Engine/` folder. When omitted, resolved from `.uproject` `EngineAssociation` via the Windows registry. |
+| `--no-reapply` | Only apply missing patches; skip the unpatch+reapply cycle. |
+
+```bat
+REM Registered engine (resolved from .uproject)
+SyncPatches.bat "<project_dir>"
+
+REM Source-built engine
+SyncPatches.bat "<project_dir>" "<engine_root>\Engine"
+```
+
+`EnginePatchCLI.exe` also accepts `--engine-dir <path>` directly. `UE_ENGINE_DIR` is a fallback environment variable (checked before the registry).
 
 ## Adding patches for a new plugin
 
-1. Create `Plugins/<YourPlugin>/EnginePatch/` in your plugin directory.
-2. Add one JSON file per logical change following the format above.
-3. Set `"plugin": "<YourPlugin>"` in each file so auto-sync works.
-4. If your plugin directory is not `Recall`, add a discovery path in `UUnrealEnginePatchSubsystem::Initialize()`:
-   ```cpp
-   PatchDirectories.Add(FPaths::ConvertRelativePathToFull(
-       FPaths::ProjectPluginsDir() / TEXT("<YourPlugin>/EnginePatch")));
-   ```
-5. Build and open the editor — patches appear in `Tools > Engine Patch Manager`.
+1. Create `Plugins/<YourPlugin>/EnginePatch/` and add JSON files following the format above.
+2. Set `"plugin": "<YourPlugin>"` so auto-sync works.
+3. Build and open the editor — patches appear in `Tools > Engine Patch Manager`.
