@@ -41,13 +41,15 @@ struct EnginePatch {
 class EnginePatchManager;
 
 // Sync all patches.
-// reapply=true (default): unpatch all currently-applied patches first, then re-apply according
+// reapply=true: unpatch all currently-applied patches first, then re-apply according
 //   to plugin enabled state. Ensures a clean state when patch content may have changed.
 // reapply=false: only apply/unapply what is strictly necessary (incremental).
+// unapplyOnly=true: remove all applied patches and do not re-apply.
 void SyncPatches(
     const std::vector<EnginePatch>& patches,
     const std::map<std::string, bool>& pluginEnabled,
     const std::string& engineDir,
     const std::string& engineVersion,
     std::ostream& log,
-    bool reapply = false);
+    bool reapply = false,
+    bool unapplyOnly = false);

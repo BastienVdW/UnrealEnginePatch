@@ -1,6 +1,7 @@
 #include "EnginePatchFileLoader.h"
 #include "nlohmann/json.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <filesystem>
@@ -38,6 +39,9 @@ std::vector<EnginePatch> EnginePatchFileLoader::LoadPatchesFromDirectory(const s
     } catch (...) {
         // Silently ignore filesystem errors
     }
+
+    std::sort(patches.begin(), patches.end(),
+        [](const EnginePatch& a, const EnginePatch& b) { return a.patchId < b.patchId; });
 
     return patches;
 }

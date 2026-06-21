@@ -398,8 +398,29 @@ void SyncPatches(
     const std::string& engineDir,
     const std::string& engineVersion,
     std::ostream& log,
-    bool reapply)
+    bool reapply,
+    bool unapplyOnly)
 {
+    if (unapplyOnly)
+    {
+        for (auto it = patches.rbegin(); it != patches.rend(); ++it)
+        {
+            const EnginePatch& patch = *it;
+            PatchStatus status = EnginePatchManager::GetPatchStatus(patch, engineDir, engineVersion);
+            if (status == PatchStatus::Applied || status == PatchStatus::Error)
+            {
+                std::string err;
+                bool ok = EnginePatchManager::UnpatchPatch(patch, engineDir, engineVersion, err);
+                log << "[UNAPPLY] " << patch.patchId << (ok ? " OK" : " FAILED: " + err) << "\n";
+            }
+            else
+            {
+                log << "[SKIP] " << patch.patchId << " (not applied)\n";
+            }
+        }
+        return;
+    }
+
     if (reapply)
     {
         for (const auto& patch : patches)

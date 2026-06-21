@@ -42,7 +42,7 @@ std::string GetEngineDir(const std::string& version) {
 
 int main(int argc, char* argv[]) {
     if (argc < 2) {
-        std::cerr << "Usage: EnginePatchCLI <project_dir> [--reapply|--no-reapply]" << std::endl;
+        std::cerr << "Usage: EnginePatchCLI <project_dir> [--reapply|--no-reapply|--unapply]" << std::endl;
         return 1;
     }
 
@@ -50,10 +50,12 @@ int main(int argc, char* argv[]) {
 
     // Parse optional flags (default: no reapply; bat passes --reapply explicitly)
     bool reapply = false;
+    bool unapplyOnly = false;
     for (int i = 2; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--reapply")    reapply = true;
         if (arg == "--no-reapply") reapply = false;
+        if (arg == "--unapply")    unapplyOnly = true;
     }
     fs::path projectPath(projectDir);
 
@@ -153,7 +155,7 @@ int main(int argc, char* argv[]) {
 
     // 5. Call SyncPatches
     try {
-        SyncPatches(allPatches, pluginEnabled, engineDir, engineVersion, std::cout, reapply);
+        SyncPatches(allPatches, pluginEnabled, engineDir, engineVersion, std::cout, reapply, unapplyOnly);
     } catch (const std::exception& e) {
         std::cerr << "[EnginePatch] Sync failed: " << e.what() << std::endl;
         return 1;
